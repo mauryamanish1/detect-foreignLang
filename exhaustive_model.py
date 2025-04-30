@@ -10,7 +10,7 @@ from collections import Counter
 from lingua import LanguageDetectorBuilder
 import requests
 
-# --- API Key (Keep this secure - ideally, get it from Streamlit secrets) ---
+# --- API Key ---
 G_API_KEY = st.secrets.get("GOOGLE_TRANSLATE_API_KEY")
 if not G_API_KEY:
     st.error("Google Translate API key not found in Streamlit secrets.")
@@ -28,7 +28,7 @@ def extract_blocks_and_tables(pdf_path):
         page_fitz = doc.load_page(page_num)
         page_plumber = plumber_pdf.pages[page_num]
 
-        # Extract regular text blocks
+        # First: extract regular text blocks
         blocks = page_fitz.get_text("dict", flags=fitz.TEXT_DEHYPHENATE)["blocks"]
         font_sizes = []
         for block in blocks:
@@ -74,7 +74,7 @@ def extract_blocks_and_tables(pdf_path):
                 "bbox": bbox,
             })
 
-        # Extract tables
+        # Second: extract tables if any
         tables = page_plumber.extract_tables()
         for table in tables:
             for row in table:
@@ -235,7 +235,7 @@ def detect_languages_batch(texts):
         return [None] * len(texts)
 
 # --- Streamlit App ---
-st.title("PDF Language Analysis")
+st.title("PDF Foreign Language Detection")
 
 uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
 
@@ -251,9 +251,9 @@ if uploaded_file is not None:
         df_final_detail = enrich_dataframe(df_final)
 
         if not df_final_detail.empty:
-            major_lang = df_final_detail['language_detected'].value_counts().idxmax()
-            df_clean = df_final_detail.loc[((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))]
+            df_clean = df_final_detail.loc[((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))].copy()
             df_clean.drop_duplicates(subset='text', keep='first', inplace=True)
+            major_lang = df_clean['language_detected'].value_counts().idxmax()
             df_foreign = df_clean.loc[df_clean['language_detected'] != major_lang].copy()
             df_foreign = df_foreign[~df_foreign['text'].str.contains(r'(\.\s*){3,}', regex=True)].copy()
             df_foreign.loc[:, 'revised_language_detected'] = df_foreign['text'].apply(lambda x: detect_major_language_lingua(x, n=3))
@@ -274,12 +274,6 @@ if uploaded_file is not None:
             ].copy()
 
             df_foreign_to_google_no_toc = df_foreign_to_google[~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)].copy()
-
-            st.write("df_final_detail:", df_final_detail.head())
-            st.write("df_foreign:", df_foreign.head())
-            st.write("df_foreign_to_google_no_toc:", df_foreign_to_google_no_toc.head())
-            st.write("df_foreign_to_google_no_toc['language_google'].value_counts():", df_foreign_to_google_no_toc['language_google'].value_counts())
-
 
             if not df_foreign_to_google_no_toc.empty:
                 batch_size = 100
