@@ -275,6 +275,12 @@ if uploaded_file is not None:
 
             df_foreign_to_google_no_toc = df_foreign_to_google[~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)].copy()
 
+            st.write("df_final_detail:", df_final_detail.head())
+            st.write("df_foreign:", df_foreign.head())
+            st.write("df_foreign_to_google_no_toc:", df_foreign_to_google_no_toc.head())
+            st.write("df_foreign_to_google_no_toc['language_google'].value_counts():", df_foreign_to_google_no_toc['language_google'].value_counts())
+
+
             if not df_foreign_to_google_no_toc.empty:
                 batch_size = 100
                 results = []
