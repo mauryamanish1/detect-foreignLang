@@ -1,2 +1,11 @@
+pymupdf
+pdfplumber
+pandas
+seaborn
+fitz
+langdetect
+wordfreq
+lingua-language-detector
+requests
 streamlit
-openai
+google-cloud-translate
