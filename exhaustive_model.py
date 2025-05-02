@@ -129,7 +129,7 @@ def get_word_count(text):
     return len(re.findall(r'\S+', clean_text(text)))
 
 def enrich_dataframe(df):
-    df['language_detected'] = df['text'].apply(detect_language)
+    df['language_detected'] = df['text'].apply(lambda text: detect_major_language_lingua(text))
     df['word_count'] = df['text'].apply(get_word_count)
     return df
 
