@@ -21,6 +21,88 @@ if not G_API_KEY:
 def dehyphenate_text(text):
     return re.sub(r'-\s*\n?\s*', '', text)
 
+# def extract_blocks_and_tables(pdf_path):
+#     start_time = time.time()
+#     doc = fitz.open(pdf_path)
+#     plumber_pdf = pdfplumber.open(pdf_path)
+#     blocks_data = []
+#     for page_num in range(len(doc)):
+#         page_fitz = doc.load_page(page_num)
+#         page_plumber = plumber_pdf.pages[page_num]
+
+#         # First: extract regular text blocks
+#         blocks = page_fitz.get_text("dict", flags=fitz.TEXT_DEHYPHENATE)["blocks"]
+#         font_sizes = []
+#         for block in blocks:
+#             for line in block.get("lines", []):
+#                 for span in line.get("spans", []):
+#                     font_sizes.append(span["size"])
+#         avg_font_size = sum(font_sizes) / len(font_sizes) if font_sizes else 0
+
+#         for block in blocks:
+#             block_text = ""
+#             max_font_size = 0
+#             bold_flags = []
+#             for line in block.get("lines", []):
+#                 for span in line.get("spans", []):
+#                     block_text += span["text"] + " "
+#                     if span["size"] > max_font_size:
+#                         max_font_size = span["size"]
+#                     bold_flags.append("bold" in span["font"].lower())
+#             block_text = block_text.strip()
+#             if not block_text:
+#                 continue
+#             bbox = block.get("bbox", None)
+#             if not bbox:
+#                 continue
+#             x0, y0, x1, y1 = bbox
+#             is_bold = any(bold_flags)
+#             is_heading = (
+#                 (max_font_size > avg_font_size * 1.01) and
+#                 (is_bold) and
+#                 (x0 < 100) and
+#                 (len(block_text) < 150)
+#             )
+#             blocks_data.append({
+#                 "page": page_num + 1,
+#                 "text": block_text,
+#                 "is_heading": is_heading,
+#                 "is_table": False,
+#                 "font_size": max_font_size,
+#                 "x0": x0,
+#                 "y0": y0,
+#                 "x1": x1,
+#                 "y1": y1,
+#                 "bbox": bbox,
+#             })
+
+#         # Second: extract tables if any
+#         tables = page_plumber.extract_tables()
+#         for table in tables:
+#             for row in table:
+#                 for cell in row:
+#                     if cell and cell.strip():
+#                         clean_cell = dehyphenate_text(cell.strip())
+#                         blocks_data.append({
+#                             "page": page_num + 1,
+#                             "text": clean_cell,
+#                             "is_heading": False,
+#                             "is_table": True,
+#                             "font_size": None,
+#                             "x0": None,
+#                             "y0": None,
+#                             "x1": x1,
+#                             "y1": y1,
+#                             "bbox": None,
+#                         })
+#     plumber_pdf.close()
+#     df_blocks = pd.DataFrame(blocks_data)
+#     end_time = time.time()
+#     st.write(f"Time taken for extract_blocks_and_tables: {end_time - start_time:.2f} seconds")
+#     return df_blocks
+
+##################
+
 def extract_blocks_and_tables(pdf_path):
     start_time = time.time()
     doc = fitz.open(pdf_path)
@@ -77,29 +159,32 @@ def extract_blocks_and_tables(pdf_path):
             })
 
         # Second: extract tables if any
-        tables = page_plumber.extract_tables()
+        tables = page_plumber.extract_tables(table_settings={"vertical_strategy": "lines", "horizontal_strategy": "lines"}) #changed table extraction strategy
         for table in tables:
-            for row in table:
-                for cell in row:
-                    if cell and cell.strip():
-                        clean_cell = dehyphenate_text(cell.strip())
-                        blocks_data.append({
-                            "page": page_num + 1,
-                            "text": clean_cell,
-                            "is_heading": False,
-                            "is_table": True,
-                            "font_size": None,
-                            "x0": None,
-                            "y0": None,
-                            "x1": x1,
-                            "y1": y1,
-                            "bbox": None,
-                        })
+            for row in table.extract():  # Use table.extract()
+                if row:
+                  text = ' '.join(filter(None, row))
+                  if text:
+                    blocks_data.append({
+                        "page": page_num + 1,
+                        "text": text,
+                        "is_heading": False,
+                        "is_table": True,
+                        "font_size": None,
+                        "x0": None,
+                        "y0": None,
+                        "x1": None,
+                        "y1": None,
+                        "bbox": None,
+                    })
     plumber_pdf.close()
     df_blocks = pd.DataFrame(blocks_data)
     end_time = time.time()
     st.write(f"Time taken for extract_blocks_and_tables: {end_time - start_time:.2f} seconds")
     return df_blocks
+
+#########
+
 
 def detect_header_footer(df_blocks, y_tolerance=10, min_repeats=50):
     start_time = time.time()
