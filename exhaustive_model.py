@@ -247,21 +247,21 @@ if uploaded_file is not None:
         pdf_path = "temp.pdf"
 
         df_blocks = extract_blocks_and_tables(pdf_path)
-        st.write("df_blocks.head():", df_blocks.head().to_string())
+        # st.write("df_blocks.head():", df_blocks.head().to_string())
         st.write("df_blocks.shape:", df_blocks.shape)
         if df_blocks.empty:
             st.error("df_blocks is empty after extract_blocks_and_tables.")
             st.stop()  # Stop processing if df_blocks is empty
 
         df_final = detect_header_footer(df_blocks)
-        st.write("df_final.head():", df_final.head().to_string())
+        # st.write("df_final.head():", df_final.head().to_string())
         st.write("df_final.shape:", df_final.shape)
         if df_final.empty:
             st.error("df_final is empty after detect_header_footer.")
             st.stop()
 
         df_final_detail = enrich_dataframe(df_final)
-        st.write("df_final_detail.head():", df_final_detail.head().to_string())
+        # st.write("df_final_detail.head():", df_final_detail.head().to_string())
         st.write("df_final_detail['language_detected'].value_counts():", df_final_detail['language_detected'].value_counts())
         st.write("df_final_detail['word_count'].describe():", df_final_detail['word_count'].describe())
         if df_final_detail.empty:
@@ -270,7 +270,7 @@ if uploaded_file is not None:
 
         df_clean_filter = ((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))
         df_clean = df_final_detail.loc[df_clean_filter].copy()
-        st.write("df_clean.head():", df_clean.head().to_string())
+        # st.write("df_clean.head():", df_clean.head().to_string())
         st.write("df_clean.shape:", df_clean.shape)
         if df_clean.empty:
             st.error("df_clean is empty after filtering for non-header/footer and word count >= 3.")
@@ -284,7 +284,7 @@ if uploaded_file is not None:
             st.write(f"major_lang: {major_lang}")
             df_foreign_filter = (df_clean['language_detected'] != major_lang)
             df_foreign = df_clean.loc[df_foreign_filter].copy()
-            st.write("df_foreign.head():", df_foreign.head().to_string())
+            # st.write("df_foreign.head():", df_foreign.head().to_string())
             st.write("df_foreign.shape:", df_foreign.shape)
             if df_foreign.empty:
                 st.info(f"df_foreign is empty after filtering for language != major_lang ('{major_lang}').")
@@ -312,14 +312,14 @@ if uploaded_file is not None:
                         (df_foreign['single_char_count'] <= 0.25)
                     )
                     df_foreign_to_google = df_foreign.loc[df_foreign_to_google_filter].copy()
-                    st.write("df_foreign_to_google.head():", df_foreign_to_google.head().to_string())
+                    # st.write("df_foreign_to_google.head():", df_foreign_to_google.head().to_string())
                     st.write("df_foreign_to_google.shape:", df_foreign_to_google.shape)
                     if df_foreign_to_google.empty:
                         st.info("df_foreign_to_google is empty after final filtering.")
                     else:
                         df_foreign_to_google_no_toc_filter = ~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)
                         df_foreign_to_google_no_toc = df_foreign_to_google.loc[df_foreign_to_google_no_toc_filter].copy()
-                        st.write("df_foreign_to_google_no_toc.head():", df_foreign_to_google_no_toc.head().to_string())
+                        # st.write("df_foreign_to_google_no_toc.head():", df_foreign_to_google_no_toc.head().to_string())
                         st.write("df_foreign_to_google_no_toc.shape:", df_foreign_to_google_no_toc.shape)
 
                         batch_size = 100
