@@ -79,27 +79,30 @@ def extract_blocks_and_tables(pdf_path):
         # Second: extract tables if any
         tables = page_plumber.extract_tables(table_settings={"vertical_strategy": "lines", "horizontal_strategy": "lines"}) #changed table extraction strategy
         for table in tables:
-            try:  # Add try-except block
-                extracted_data = table.extract()
-                if extracted_data: # Check if extracted_data is not None or empty
-                    for row in extracted_data:
-                        if row:
-                            text = ' '.join(filter(None, row))
-                            if text:
-                                blocks_data.append({
-                                    "page": page_num + 1,
-                                    "text": text,
-                                    "is_heading": False,
-                                    "is_table": True,
-                                    "font_size": None,
-                                    "x0": None,
-                                    "y0": None,
-                                    "x1": None,
-                                    "y1": None,
-                                    "bbox": None,
-                                })
-            except Exception as e:
-                st.warning(f"Error extracting table on page {page_num + 1}: {e}")
+            if isinstance(table, pdfplumber.table.Table): # Check if it is a pdfplumber table object.
+                try:  # Add try-except block
+                    extracted_data = table.extract()
+                    if extracted_data: # Check if extracted_data is not None or empty
+                        for row in extracted_data:
+                            if row:
+                                text = ' '.join(filter(None, row))
+                                if text:
+                                    blocks_data.append({
+                                        "page": page_num + 1,
+                                        "text": text,
+                                        "is_heading": False,
+                                        "is_table": True,
+                                        "font_size": None,
+                                        "x0": None,
+                                        "y0": None,
+                                        "x1": None,
+                                        "y1": None,
+                                        "bbox": None,
+                                    })
+                except Exception as e:
+                    st.warning(f"Error extracting table on page {page_num + 1}: {e}")
+            else:
+                st.warning(f"Skipping non-table object on page {page_num + 1}")
 
     plumber_pdf.close()
     df_blocks = pd.DataFrame(blocks_data)
