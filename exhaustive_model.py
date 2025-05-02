@@ -140,7 +140,7 @@ def enrich_dataframe(df):
     df['language_detected'] = df['text'].apply(lambda text: detect_major_language_lingua(text))
     df['word_count'] = df['text'].apply(get_word_count)
     end_time = time.time()
-    st.write(f"Time taken for enrich_dataframe: {end_time - start_time:.2f} seconds")
+    st.write(f"Time taken for enrich_dataframe (Lingua Detection): {end_time - start_time:.2f} seconds")
     return df
 
 detector = LanguageDetectorBuilder.from_all_languages().build()
@@ -157,7 +157,6 @@ def generate_ngrams(text, n=3):
     return ngrams
 
 def detect_major_language_lingua(text, n=3):
-    start_time = time.time()
     text = clean_for_ngrams(text)
     ngrams = generate_ngrams(text, n)
     lang_counter = Counter()
@@ -170,12 +169,8 @@ def detect_major_language_lingua(text, n=3):
             continue
     if lang_counter:
         major_lang = lang_counter.most_common(1)[0][0]
-        end_time = time.time()
-        st.write(f"Time taken for detect_major_language_lingua: {end_time - start_time:.2f} seconds")
         return major_lang.iso_code_639_1.name.lower()
     else:
-        end_time = time.time()
-        st.write(f"Time taken for detect_major_language_lingua: {end_time - start_time:.2f} seconds")
         return 'unknown'
 
 def avg_word_count_per_line(text):
@@ -244,17 +239,17 @@ def detect_languages_batch(texts):
         detections = response.json()['data']['detections']
         languages = [d[0]['language'] for d in detections]
         end_time = time.time()
-        st.write(f"Time taken for detect_languages_batch: {end_time - start_time:.2f} seconds")
+        st.write(f"Time taken for Google API call: {end_time - start_time:.2f} seconds")
         return languages
     except requests.exceptions.RequestException as e:
         st.error(f"Error communicating with Google Translate API: {e}")
         end_time = time.time()
-        st.write(f"Time taken for detect_languages_batch (error): {end_time - start_time:.2f} seconds")
+        st.write(f"Time taken for Google API call (error): {end_time - start_time:.2f} seconds")
         return [None] * len(texts)
     except (KeyError, ValueError) as e:
         st.error(f"Error parsing Google Translate API response: {e}")
         end_time = time.time()
-        st.write(f"Time taken for detect_languages_batch (error): {end_time - start_time:.2f} seconds")
+        st.write(f"Time taken for Google API call (error): {end_time - start_time:.2f} seconds")
         return [None] * len(texts)
 
 # --- Streamlit App ---
@@ -350,10 +345,13 @@ if uploaded_file is not None:
 
                         batch_size = 100
                         results = []
+                        google_start_time = time.time() # start timing
                         for i in range(0, len(df_foreign_to_google_no_toc), batch_size):
                             batch = df_foreign_to_google_no_toc['text'].iloc[i:i + batch_size].tolist()
                             langs = detect_languages_batch(batch)
                             results.extend(langs)
+                        google_end_time = time.time()
+                        st.write(f"Time taken for Google API all batches: {google_end_time - google_start_time:.2f} seconds")
                         df_foreign_to_google_no_toc.loc[:, 'language_google'] = results
 
                         df_display = df_foreign_to_google_no_toc.loc[df_foreign_to_google_no_toc['language_google'] != major_lang][['page', 'text', 'word_count', 'language_google']].reset_index(drop=True)
@@ -377,4 +375,3 @@ if uploaded_file is not None:
                             st.info("No foreign language blocks found based on the analysis.")
         else:
             st.info("Could not extract text blocks from the PDF.")
-
