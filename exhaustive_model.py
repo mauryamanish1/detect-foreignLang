@@ -9,6 +9,7 @@ from wordfreq import word_frequency
 from collections import Counter
 from lingua import LanguageDetectorBuilder
 import requests
+import time  # Import the time module
 
 # --- API Key ---
 G_API_KEY = st.secrets.get("GOOGLE_TRANSLATE_API_KEY")
@@ -21,6 +22,7 @@ def dehyphenate_text(text):
     return re.sub(r'-\s*\n?\s*', '', text)
 
 def extract_blocks_and_tables(pdf_path):
+    start_time = time.time()
     doc = fitz.open(pdf_path)
     plumber_pdf = pdfplumber.open(pdf_path)
     blocks_data = []
@@ -89,15 +91,18 @@ def extract_blocks_and_tables(pdf_path):
                             "font_size": None,
                             "x0": None,
                             "y0": None,
-                            "x1": None,
-                            "y1": None,
+                            "x1": x1,
+                            "y1": y1,
                             "bbox": None,
                         })
     plumber_pdf.close()
     df_blocks = pd.DataFrame(blocks_data)
+    end_time = time.time()
+    st.write(f"Time taken for extract_blocks_and_tables: {end_time - start_time:.2f} seconds")
     return df_blocks
 
 def detect_header_footer(df_blocks, y_tolerance=10, min_repeats=50):
+    start_time = time.time()
     y_positions = df_blocks['y0'].round(1)
     y_counts = y_positions.value_counts()
     frequent_y = y_counts[y_counts >= min_repeats].index.tolist()
@@ -111,6 +116,8 @@ def detect_header_footer(df_blocks, y_tolerance=10, min_repeats=50):
 
     header_footer_flags = df_blocks.apply(classify_block, axis=1)
     df_blocks = pd.concat([df_blocks, header_footer_flags], axis=1)
+    end_time = time.time()
+    st.write(f"Time taken for detect_header_footer: {end_time - start_time:.2f} seconds")
     return df_blocks
 
 def clean_text(text):
@@ -129,8 +136,11 @@ def get_word_count(text):
     return len(re.findall(r'\S+', clean_text(text)))
 
 def enrich_dataframe(df):
+    start_time = time.time()
     df['language_detected'] = df['text'].apply(lambda text: detect_major_language_lingua(text))
     df['word_count'] = df['text'].apply(get_word_count)
+    end_time = time.time()
+    st.write(f"Time taken for enrich_dataframe: {end_time - start_time:.2f} seconds")
     return df
 
 detector = LanguageDetectorBuilder.from_all_languages().build()
@@ -147,6 +157,7 @@ def generate_ngrams(text, n=3):
     return ngrams
 
 def detect_major_language_lingua(text, n=3):
+    start_time = time.time()
     text = clean_for_ngrams(text)
     ngrams = generate_ngrams(text, n)
     lang_counter = Counter()
@@ -159,8 +170,12 @@ def detect_major_language_lingua(text, n=3):
             continue
     if lang_counter:
         major_lang = lang_counter.most_common(1)[0][0]
+        end_time = time.time()
+        st.write(f"Time taken for detect_major_language_lingua: {end_time - start_time:.2f} seconds")
         return major_lang.iso_code_639_1.name.lower()
     else:
+        end_time = time.time()
+        st.write(f"Time taken for detect_major_language_lingua: {end_time - start_time:.2f} seconds")
         return 'unknown'
 
 def avg_word_count_per_line(text):
@@ -220,18 +235,26 @@ def count_single_char_tokens(text):
     return sum(1 for token in tokens if len(token) == 1) / len(tokens) if tokens else 0
 
 def detect_languages_batch(texts):
+    start_time = time.time()
     url = f"https://translation.googleapis.com/language/translate/v2/detect?key={G_API_KEY}"
     data = [('q', text) for text in texts]
     try:
         response = requests.post(url, data=data)
         response.raise_for_status()  # Raise an exception for HTTP errors
         detections = response.json()['data']['detections']
-        return [d[0]['language'] for d in detections]
+        languages = [d[0]['language'] for d in detections]
+        end_time = time.time()
+        st.write(f"Time taken for detect_languages_batch: {end_time - start_time:.2f} seconds")
+        return languages
     except requests.exceptions.RequestException as e:
         st.error(f"Error communicating with Google Translate API: {e}")
+        end_time = time.time()
+        st.write(f"Time taken for detect_languages_batch (error): {end_time - start_time:.2f} seconds")
         return [None] * len(texts)
     except (KeyError, ValueError) as e:
         st.error(f"Error parsing Google Translate API response: {e}")
+        end_time = time.time()
+        st.write(f"Time taken for detect_languages_batch (error): {end_time - start_time:.2f} seconds")
         return [None] * len(texts)
 
 # --- Streamlit App ---
@@ -248,14 +271,14 @@ if uploaded_file is not None:
 
         df_blocks = extract_blocks_and_tables(pdf_path)
         # st.write("df_blocks.head():", df_blocks.head().to_string())
-        st.write("df_blocks.shape:", df_blocks.shape)
+        # st.write("df_blocks.shape:", df_blocks.shape)
         if df_blocks.empty:
             st.error("df_blocks is empty after extract_blocks_and_tables.")
             st.stop()  # Stop processing if df_blocks is empty
 
         df_final = detect_header_footer(df_blocks)
         # st.write("df_final.head():", df_final.head().to_string())
-        st.write("df_final.shape:", df_final.shape)
+        # st.write("df_final.shape:", df_final.shape)
         if df_final.empty:
             st.error("df_final is empty after detect_header_footer.")
             st.stop()
@@ -295,12 +318,15 @@ if uploaded_file is not None:
                 if df_foreign.empty:
                     st.info("df_foreign is empty after removing TOC-like lines.")
                 else:
+                    start_time = time.time()
                     df_foreign.loc[:, 'revised_language_detected'] = df_foreign['text'].apply(lambda x: detect_major_language_lingua(x, n=3))
                     df_foreign.loc[:, 'avg_word_count_per_line'] = df_foreign['text'].apply(avg_word_count_per_line)
                     df_foreign.loc[:, 'percent_numeric_tokens'] = df_foreign['text'].apply(percent_numeric_tokens)
                     df_foreign.loc[:, 'dict_word_percent'] = df_foreign.apply(lambda row: dictionary_word_percent(row['text'], major_lang), axis=1)
                     df_foreign.loc[:, 'is_garbage'] = df_foreign['text'].apply(lambda x: is_garbage_line(x, major_lang=major_lang))
                     df_foreign.loc[:, 'single_char_count'] = df_foreign['text'].apply(count_single_char_tokens)
+                    end_time = time.time()
+                    st.write(f"Time taken for feature engineering: {end_time - start_time:.2f} seconds")
 
                     df_foreign_to_google_filter = (
                         (df_foreign['avg_word_count_per_line'] > 2) &
@@ -351,3 +377,4 @@ if uploaded_file is not None:
                             st.info("No foreign language blocks found based on the analysis.")
         else:
             st.info("Could not extract text blocks from the PDF.")
+
