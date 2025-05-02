@@ -247,64 +247,107 @@ if uploaded_file is not None:
         pdf_path = "temp.pdf"
 
         df_blocks = extract_blocks_and_tables(pdf_path)
+        st.write("df_blocks.head():", df_blocks.head().to_string())
+        st.write("df_blocks.shape:", df_blocks.shape)
+        if df_blocks.empty:
+            st.error("df_blocks is empty after extract_blocks_and_tables.")
+            st.stop()  # Stop processing if df_blocks is empty
+
         df_final = detect_header_footer(df_blocks)
+        st.write("df_final.head():", df_final.head().to_string())
+        st.write("df_final.shape:", df_final.shape)
+        if df_final.empty:
+            st.error("df_final is empty after detect_header_footer.")
+            st.stop()
+
         df_final_detail = enrich_dataframe(df_final)
+        st.write("df_final_detail.head():", df_final_detail.head().to_string())
+        st.write("df_final_detail['language_detected'].value_counts():", df_final_detail['language_detected'].value_counts())
+        st.write("df_final_detail['word_count'].describe():", df_final_detail['word_count'].describe())
+        if df_final_detail.empty:
+            st.error("df_final_detail is empty after enrich_dataframe.")
+            st.stop()
 
-        if not df_final_detail.empty:
-            df_clean = df_final_detail.loc[((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))].copy()
-            df_clean.drop_duplicates(subset='text', keep='first', inplace=True)
+        df_clean_filter = ((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))
+        df_clean = df_final_detail.loc[df_clean_filter].copy()
+        st.write("df_clean.head():", df_clean.head().to_string())
+        st.write("df_clean.shape:", df_clean.shape)
+        if df_clean.empty:
+            st.error("df_clean is empty after filtering for non-header/footer and word count >= 3.")
+            st.stop()
+
+        df_clean.drop_duplicates(subset='text', keep='first', inplace=True)
+        st.write("df_clean (after duplicates removed).shape:", df_clean.shape)
+        st.write("df_clean['language_detected'].value_counts():", df_clean['language_detected'].value_counts())
+        if not df_clean['language_detected'].empty:
             major_lang = df_clean['language_detected'].value_counts().idxmax()
-            df_foreign = df_clean.loc[df_clean['language_detected'] != major_lang].copy()
-            df_foreign = df_foreign[~df_foreign['text'].str.contains(r'(\.\s*){3,}', regex=True)].copy()
-            df_foreign.loc[:, 'revised_language_detected'] = df_foreign['text'].apply(lambda x: detect_major_language_lingua(x, n=3))
-            df_foreign.loc[:, 'avg_word_count_per_line'] = df_foreign['text'].apply(avg_word_count_per_line)
-            df_foreign.loc[:, 'percent_numeric_tokens'] = df_foreign['text'].apply(percent_numeric_tokens)
-            df_foreign.loc[:, 'dict_word_percent'] = df_foreign.apply(lambda row: dictionary_word_percent(row['text'], major_lang), axis=1)
-            df_foreign.loc[:, 'is_garbage'] = df_foreign['text'].apply(lambda x: is_garbage_line(x, major_lang=major_lang))
-            df_foreign.loc[:, 'single_char_count'] = df_foreign['text'].apply(count_single_char_tokens)
-
-            df_foreign_to_google = df_foreign.loc[
-                (df_foreign['avg_word_count_per_line'] > 2) &
-                (df_foreign['avg_word_count_per_line'] < 25) &
-                (df_foreign['revised_language_detected'] != major_lang) &
-                (df_foreign['dict_word_percent'] > 0.35) &
-                (df_foreign['percent_numeric_tokens'] <= 0.1) &
-                (df_foreign['is_garbage'] == False) &
-                (df_foreign['single_char_count'] <= 0.25)
-            ].copy()
-
-            df_foreign_to_google_no_toc = df_foreign_to_google[~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)].copy()
-
-            if not df_foreign_to_google_no_toc.empty:
-                batch_size = 100
-                results = []
-                for i in range(0, len(df_foreign_to_google_no_toc), batch_size):
-                    batch = df_foreign_to_google_no_toc['text'].iloc[i:i + batch_size].tolist()
-                    langs = detect_languages_batch(batch)
-                    results.extend(langs)
-                df_foreign_to_google_no_toc.loc[:, 'language_google'] = results
-
-                df_display = df_foreign_to_google_no_toc.loc[df_foreign_to_google_no_toc['language_google'] != major_lang][['page', 'text', 'word_count', 'language_google']].reset_index(drop=True)
-
-                st.subheader("Detected Foreign Language Blocks")
-                if not df_display.empty:
-                    st.dataframe(df_display)
-
-                    @st.cache_data
-                    def convert_df_to_csv(df):
-                        return df.to_csv(index=False).encode('utf-8')
-
-                    csv_data = convert_df_to_csv(df_display)
-
-                    st.download_button(
-                        label="Download detected foreign language blocks as CSV",
-                        data=csv_data,
-                        file_name="foreign_language_blocks.csv",
-                        mime="text/csv",
-                    )
-                else:
-                    st.info("No foreign language blocks found based on the analysis.")
+            st.write(f"major_lang: {major_lang}")
+            df_foreign_filter = (df_clean['language_detected'] != major_lang)
+            df_foreign = df_clean.loc[df_foreign_filter].copy()
+            st.write("df_foreign.head():", df_foreign.head().to_string())
+            st.write("df_foreign.shape:", df_foreign.shape)
+            if df_foreign.empty:
+                st.info(f"df_foreign is empty after filtering for language != major_lang ('{major_lang}').")
             else:
-                st.info("No relevant foreign language blocks found after initial filtering.")
+                df_foreign_no_toc_filter = ~df_foreign['text'].str.contains(r'(\.\s*){3,}', regex=True)
+                df_foreign = df_foreign.loc[df_foreign_no_toc_filter].copy()
+                st.write("df_foreign (after removing TOC-like lines).shape:", df_foreign.shape)
+                if df_foreign.empty:
+                    st.info("df_foreign is empty after removing TOC-like lines.")
+                else:
+                    df_foreign.loc[:, 'revised_language_detected'] = df_foreign['text'].apply(lambda x: detect_major_language_lingua(x, n=3))
+                    df_foreign.loc[:, 'avg_word_count_per_line'] = df_foreign['text'].apply(avg_word_count_per_line)
+                    df_foreign.loc[:, 'percent_numeric_tokens'] = df_foreign['text'].apply(percent_numeric_tokens)
+                    df_foreign.loc[:, 'dict_word_percent'] = df_foreign.apply(lambda row: dictionary_word_percent(row['text'], major_lang), axis=1)
+                    df_foreign.loc[:, 'is_garbage'] = df_foreign['text'].apply(lambda x: is_garbage_line(x, major_lang=major_lang))
+                    df_foreign.loc[:, 'single_char_count'] = df_foreign['text'].apply(count_single_char_tokens)
+
+                    df_foreign_to_google_filter = (
+                        (df_foreign['avg_word_count_per_line'] > 2) &
+                        (df_foreign['avg_word_count_per_line'] < 25) &
+                        (df_foreign['revised_language_detected'] != major_lang) &
+                        (df_foreign['dict_word_percent'] > 0.35) &
+                        (df_foreign['percent_numeric_tokens'] <= 0.1) &
+                        (df_foreign['is_garbage'] == False) &
+                        (df_foreign['single_char_count'] <= 0.25)
+                    )
+                    df_foreign_to_google = df_foreign.loc[df_foreign_to_google_filter].copy()
+                    st.write("df_foreign_to_google.head():", df_foreign_to_google.head().to_string())
+                    st.write("df_foreign_to_google.shape:", df_foreign_to_google.shape)
+                    if df_foreign_to_google.empty:
+                        st.info("df_foreign_to_google is empty after final filtering.")
+                    else:
+                        df_foreign_to_google_no_toc_filter = ~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)
+                        df_foreign_to_google_no_toc = df_foreign_to_google.loc[df_foreign_to_google_no_toc_filter].copy()
+                        st.write("df_foreign_to_google_no_toc.head():", df_foreign_to_google_no_toc.head().to_string())
+                        st.write("df_foreign_to_google_no_toc.shape:", df_foreign_to_google_no_toc.shape)
+
+                        batch_size = 100
+                        results = []
+                        for i in range(0, len(df_foreign_to_google_no_toc), batch_size):
+                            batch = df_foreign_to_google_no_toc['text'].iloc[i:i + batch_size].tolist()
+                            langs = detect_languages_batch(batch)
+                            results.extend(langs)
+                        df_foreign_to_google_no_toc.loc[:, 'language_google'] = results
+
+                        df_display = df_foreign_to_google_no_toc.loc[df_foreign_to_google_no_toc['language_google'] != major_lang][['page', 'text', 'word_count', 'language_google']].reset_index(drop=True)
+                        st.subheader("Detected Foreign Language Blocks")
+                        if not df_display.empty:
+                            st.dataframe(df_display)
+
+                            @st.cache_data
+                            def convert_df_to_csv(df):
+                                return df.to_csv(index=False).encode('utf-8')
+
+                            csv_data = convert_df_to_csv(df_display)
+
+                            st.download_button(
+                                label="Download detected foreign language blocks as CSV",
+                                data=csv_data,
+                                file_name="foreign_language_blocks.csv",
+                                mime="text/csv",
+                            )
+                        else:
+                            st.info("No foreign language blocks found based on the analysis.")
         else:
             st.info("Could not extract text blocks from the PDF.")
