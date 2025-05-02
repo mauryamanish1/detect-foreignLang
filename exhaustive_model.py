@@ -262,8 +262,8 @@ if uploaded_file is not None:
 
         df_final_detail = enrich_dataframe(df_final)
         # st.write("df_final_detail.head():", df_final_detail.head().to_string())
-        st.write("df_final_detail['language_detected'].value_counts():", df_final_detail['language_detected'].value_counts())
-        st.write("df_final_detail['word_count'].describe():", df_final_detail['word_count'].describe())
+        # st.write("df_final_detail['language_detected'].value_counts():", df_final_detail['language_detected'].value_counts())
+        # st.write("df_final_detail['word_count'].describe():", df_final_detail['word_count'].describe())
         if df_final_detail.empty:
             st.error("df_final_detail is empty after enrich_dataframe.")
             st.stop()
@@ -271,27 +271,27 @@ if uploaded_file is not None:
         df_clean_filter = ((df_final_detail['is_header'] == False) & (df_final_detail['is_footer'] == False) & (df_final_detail['word_count'] >= 3))
         df_clean = df_final_detail.loc[df_clean_filter].copy()
         # st.write("df_clean.head():", df_clean.head().to_string())
-        st.write("df_clean.shape:", df_clean.shape)
+        st.write("Total text blocks identified:", df_clean.shape[0])
         if df_clean.empty:
             st.error("df_clean is empty after filtering for non-header/footer and word count >= 3.")
             st.stop()
 
         df_clean.drop_duplicates(subset='text', keep='first', inplace=True)
-        st.write("df_clean (after duplicates removed).shape:", df_clean.shape)
-        st.write("df_clean['language_detected'].value_counts():", df_clean['language_detected'].value_counts())
+        # st.write("df_clean (after duplicates removed).shape:", df_clean.shape)
+        # st.write("df_clean['language_detected'].value_counts():", df_clean['language_detected'].value_counts())
         if not df_clean['language_detected'].empty:
             major_lang = df_clean['language_detected'].value_counts().idxmax()
-            st.write(f"major_lang: {major_lang}")
+            st.write(f"major language identified is {major_lang}")
             df_foreign_filter = (df_clean['language_detected'] != major_lang)
             df_foreign = df_clean.loc[df_foreign_filter].copy()
             # st.write("df_foreign.head():", df_foreign.head().to_string())
-            st.write("df_foreign.shape:", df_foreign.shape)
+            st.write("Total Foreign text blocks identified:", df_foreign.shape[0])
             if df_foreign.empty:
                 st.info(f"df_foreign is empty after filtering for language != major_lang ('{major_lang}').")
             else:
                 df_foreign_no_toc_filter = ~df_foreign['text'].str.contains(r'(\.\s*){3,}', regex=True)
                 df_foreign = df_foreign.loc[df_foreign_no_toc_filter].copy()
-                st.write("df_foreign (after removing TOC-like lines).shape:", df_foreign.shape)
+                st.write("Total text blocks after removing table of contents", df_foreign.shape[0])
                 if df_foreign.empty:
                     st.info("df_foreign is empty after removing TOC-like lines.")
                 else:
@@ -313,14 +313,14 @@ if uploaded_file is not None:
                     )
                     df_foreign_to_google = df_foreign.loc[df_foreign_to_google_filter].copy()
                     # st.write("df_foreign_to_google.head():", df_foreign_to_google.head().to_string())
-                    st.write("df_foreign_to_google.shape:", df_foreign_to_google.shape)
+                    st.write("Finally, total foreign text blocks being validated via google API ", df_foreign_to_google.shape)
                     if df_foreign_to_google.empty:
                         st.info("df_foreign_to_google is empty after final filtering.")
                     else:
                         df_foreign_to_google_no_toc_filter = ~df_foreign_to_google['text'].str.contains(r'(\.\s*){3,}', regex=True)
                         df_foreign_to_google_no_toc = df_foreign_to_google.loc[df_foreign_to_google_no_toc_filter].copy()
                         # st.write("df_foreign_to_google_no_toc.head():", df_foreign_to_google_no_toc.head().to_string())
-                        st.write("df_foreign_to_google_no_toc.shape:", df_foreign_to_google_no_toc.shape)
+                        # st.write("df_foreign_to_google_no_toc.shape:", df_foreign_to_google_no_toc.shape)
 
                         batch_size = 100
                         results = []
